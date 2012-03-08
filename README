@@ -1,0 +1,1 @@
+Avail_cck_field creates a grid of javascript checkboxes to show a user's general availability throughout the week.  These can be modified when editing the node in which this field is used (generally a user's content profile).    

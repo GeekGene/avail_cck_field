@@ -1,0 +1,7 @@
+; $Id$
+name = avail_cck_field
+description = Availability Check Grid
+dependencies[] = content
+package = CCK
+core = 6.x
+

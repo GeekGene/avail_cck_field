@@ -1,0 +1,546 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_theme().
+ */
+function avail_cck_field_theme()
+{
+  return array(
+    'avail_cck_field_formatter_default' => array(
+      'arguments' => array('element' => NULL),
+    ),
+    'avail_cck_field_formatter_plain' => array(
+      'arguments' => array('element' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_field_info().
+ */
+function avail_cck_field_field_info()
+{
+  return array(
+    'avail_cck_field' => array(
+      'label' => t('Availability'),
+      'description' => t('Availability Check Grid.'),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_field_settings().
+ */
+function avail_cck_field_field_settings($op, $field)
+{
+  switch ($op)
+  {
+    case 'form':
+      $form = array();
+      return $form;
+
+    case 'save':
+      return array();
+
+    case 'database columns':
+      $columns['value'] = array('type' => 'text', 'size' => 'big', 'not null' => FALSE, 'sortable' => TRUE, 'views' => TRUE);
+      return $columns;
+
+    case 'views data':
+      $data = content_views_field_views_data($field);
+      $db_info = content_database_info($field);
+      $table_alias = content_views_tablename($field);
+      $field_data = $data[$table_alias][$field['field_name'] .'_value'];
+      // Make changes to $data as needed here.
+      return $data;
+  }
+}
+
+/**
+ * Implementation of hook_field().
+ */
+function avail_cck_field_field($op, &$node, $field, &$items, $teaser, $page)
+{
+  switch ($op)
+  {
+	case 'presave':
+		foreach( $items as $delta => $item )
+		{
+			if( is_array($item['value']) )
+			{
+				$sOut = '000000000000000000000';
+				foreach( $item['value'] as $k => $v )
+				{
+					$idx = -1;
+					$mae = $k[strlen($k)-6];
+					if( $mae == 'o' ) //morning
+						$idx=0;
+					else if( $mae == 'e' ) //afternoon
+						$idx=7;
+					else if( $mae == 'v' ) //evening
+						$idx=14;
+					if( $idx<0 )
+						continue;
+					if( $k[5] == 'S' && $k[6] == 'a' )
+						$idx+=6;
+					else if( $k[5] == 'M' )
+						$idx+=1;
+					else if( $k[5] == 'T' && $k[6] == 'u' )
+						$idx+=2;
+					else if( $k[5] == 'W' )
+						$idx+=3;
+					else if( $k[5] == 'T' && $k[6] == 'h' )
+						$idx+=4;
+					else if( $k[5] == 'F' )
+						$idx+=5;
+					$sOut[$idx] = '1';
+				}
+				$items[$delta]['value'] = $sOut;
+			}
+		}
+		return $items;
+		break;
+    case 'validate':
+      if (is_array($items))
+	  {
+          foreach ($items as $delta => $item)
+		  {
+	          // The error_element is needed so that CCK can
+    	      // set an error on the right sub-element when
+              // fields are deeply nested in the form.
+	          $error_element = isset($item['_error_element']) ?
+			  	$item['_error_element'] : '';
+              if( is_array($item) && 
+				  isset($item['_error_element']) )
+				unset($item['_error_element']);
+	          if( !empty($item['value']) )
+			  {
+	              //if( !empty($field['max_length']) &&
+					//  drupal_strlen($item['value']) > $field['max_length'])
+				  //{
+	              //  form_set_error($error_element, t('%name: the value may not be longer than %max characters.', array('%name' => $field['widget']['label'], '%max' => $field['max_length'])));
+  				  //}
+	          }
+          }
+      }
+      return $items;
+
+    case 'sanitize':
+		foreach ($items as $delta => $item)
+		{
+			$example = check_plain($item['value']);
+			$items[$delta]['safe'] = $example;
+		}
+		break;
+  }
+}
+
+/**
+ * Implementation of hook_content_is_empty().
+ */
+function avail_cck_field_content_is_empty($item, $field)
+{
+  if (empty($item['value']) && (string)$item['value'] !== '0')
+  {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implementation of hook_field_formatter_info().
+ */
+function avail_cck_field_field_formatter_info()
+{
+  return array(
+    'default' => array(
+      'label' => t('Default'),
+      'field types' => array('avail_cck_field'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+    ),
+    'plain' => array(
+      'label' => t('Plain text'),
+      'field types' => array('avail_cck_field'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+    ),
+  );
+}
+
+/**
+ * Theme function for 'default' text field formatter.
+ */
+function theme_avail_cck_field_formatter_default($element)
+{
+	drupal_add_js(drupal_get_path('module', 'avail_cck_field') .
+		'/avail_grid.js');
+	$theName = "AvailGridId".rand(0,10000);
+	return
+"<div id=\"" . $theName . "_theDiv\" class=\"avail_cck_field\"></div>\n" .
+"<script type=\"text/javascript\">\n" .
+"	var _theData='" . $element['#item']['safe'] . "';\n" .
+"	var _theElem=document.getElementById('" . $theName . "_theDiv');\n" .
+"	var _aGrid = new GGAvailGrid();\n" .
+"	var _imgPath = '/" .
+	drupal_get_path("module", "avail_cck_field") .
+	"/imgs/';\n" .
+"	_aGrid.init( _theData, _theElem, _imgPath, true );\n" .
+"</script><div class=\"avail_cck_field_search\">" . 
+	theme_avail_cck_field_formatter_plain($element) .
+	"</div>";
+  //return $element['#item']['safe'];
+}
+
+/**
+ * Theme function for 'plain' text field formatter.
+ */
+function theme_avail_cck_field_formatter_plain($element)
+{
+	$sOut = '';
+	$data = $element['#item']['safe'];
+	$l = strlen($data);
+	$a = "Morning";
+	$ab = array("Mon","Tue","Wed","Thu","Fri","Sat","Sun");
+	$b = $ab[0];
+	for( $i=0; $i<$l; ++$i )
+	{
+		if( $i == 7 )
+			$a = "Afternoon";
+		else if( $i == 14 )
+			$a = "Evening";
+		$b = $ab[$i%7];
+		if( $data[$i] == "1" )
+		{
+			if( strlen($sOut)>0 )
+				$sOut .= ", ";
+			$val = "Avail" . $b . $a;
+			$sOut .= $val;
+		}
+	}
+	return $sOut;
+  //return strip_tags($element['#item']['safe']);
+}
+
+/**
+ * Implementation of hook_widget_info().
+ *
+ * Here we indicate that the content module will handle
+ * the default value and multiple values for these widgets.
+ *
+ * Callbacks can be omitted if default handing is used.
+ * They're included here just so this module can be used
+ * as an example for custom modules that might do things
+ * differently.
+ */
+function avail_cck_field_widget_info()
+{
+  return array(
+    'avail_cck_field_grid' => array(
+	  'label' => t('Availability Grid'),
+	  'field types' => array('avail_cck_field'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+      'callbacks' => array(
+        'default value' => CONTENT_CALLBACK_DEFAULT,
+      ),
+	),
+    'avail_cck_field_multisel' => array(
+	  'label' => t('Availability Multi Select'),
+	  'field types' => array('avail_cck_field'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+      'callbacks' => array(
+        'default value' => CONTENT_CALLBACK_DEFAULT,
+      ),
+	),
+    'avail_cck_field_debug' => array(
+      'label' => t('Debug Text View'),
+      'field types' => array('avail_cck_field'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+      'callbacks' => array(
+        'default value' => CONTENT_CALLBACK_DEFAULT,
+      ),
+    ),
+  );
+}
+
+
+/**
+ * Implementation of hook_widget_settings().
+ */
+function avail_cck_field_widget_settings($op, $widget)
+{
+  switch ($op)
+  {
+    case 'form':
+      $form = array();
+      return $form;
+
+    case 'save':
+      return array();
+  }
+}
+
+/**
+ * Implementation of hook_widget().
+ *
+ * Attach a single form element to the form. It will be built out and
+ * validated in the callback(s) listed in hook_elements. We build it
+ * out in the callbacks rather than here in hook_widget so it can be
+ * plugged into any module that can provide it with valid
+ * $field information.
+ *
+ * Content module will set the weight, field name and delta values
+ * for each form element. This is a change from earlier CCK versions
+ * where the widget managed its own multiple values.
+ *
+ * If there are multiple values for this field, the content module will
+ * call this function as many times as needed.
+ *
+ * @param $form
+ *   the entire form array, $form['#node'] holds node information
+ * @param $form_state
+ *   the form_state, $form_state['values'][$field['field_name']]
+ *   holds the field's form values.
+ * @param $field
+ *   the field array
+ * @param $items
+ *   array of default values for this field
+ * @param $delta
+ *   the order of this item in the array of subelements (0, 1, 2, etc)
+ *
+ * @return
+ *   the form item for a single element for this field
+ */
+function avail_cck_field_widget(
+	&$form, &$form_state, $field, $items, $delta = 0)
+{
+	$element = array();
+	//print "<pre>";
+	//print_r( $field['widget']['description'] );
+	//print "</pre>";
+
+	drupal_add_js(drupal_get_path('module', 'avail_cck_field') .
+		'/avail_grid.js');
+
+	$theName = $field['field_name'];
+	$theName .= '[' . $delta . '][value]';
+
+	switch( $field['widget']['type'] )
+	{
+    	case 'avail_cck_field_multisel':
+			$opts=array();
+			$a = "Morning";
+			$ab = array("Mon","Tue","Wed","Thu","Fri","Sat","Sun");
+			$ac = array("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday");
+			$curVal = array();
+			for( $i=0;$i<21;++$i )
+			{
+				if( $i==7 )
+					$a = 'Afternoon';
+				else if( $i==14 )
+					$a = 'Evening';
+				$opts['Avail'.$ab[$i%7].$a] = 
+					$ac[$i%7].' '.$a;
+				if( $items[$delta]['value'][$i]=='1' )
+					array_push($curVal,'Avail'.$ab[$i%7].$a);
+			}
+			$element['value'] = array(
+				'#type' => 'select',
+				'#options' => $opts,
+				'#multiple' => TRUE,
+				'#size' => $multiple ? min(12, count($opts)) : 0,
+				'#default_value' => $curVal,
+				'#attributes' => array('class' => 'avail_cck_field'),
+				);
+			break;
+		case 'avail_cck_field_grid':
+			$element['value'] = array(
+				'#type' => 'hidden',
+				'#default_value' => isset($items[$delta]['value']) ?
+					$items[$delta]['value'] : NULL,
+				'#autocomplete_path' => FALSE,
+				'#size' => 60,
+				'#suffix' =>
+"<div id=\"" . $theName . "_theDiv\" class=\"avail_cck_field\"></div>\n" .
+"<script type=\"text/javascript\">\n" .
+"	var _theData=document.getElementsByName('" . $theName . "')[0];\n" .
+"	var _theElem=document.getElementById('" . $theName . "_theDiv');\n" .
+"	var _aGrid = new GGAvailGrid();\n" .
+"	var _imgPath = '/" .
+	drupal_get_path("module", "avail_cck_field") .
+	"/imgs/';\n" .
+"	_aGrid.init( _theData, _theElem, _imgPath );\n" .
+"</script>" .
+$field['widget']['description'],
+				'#attributes' => array('class' => 'avail_cck_field'),
+				'#maxlength' => NULL,
+				);
+			break;
+		case 'avail_cck_field_debug':
+			$element['value'] = array(
+				'#type' => 'textfield',
+				'#default_value' => isset($items[$delta]['value']) ?
+					$items[$delta]['value'] : NULL,
+				'#autocomplete_path' => FALSE,
+				'#size' => 60,
+				'#attributes' => array('class' => 'avail_cck_field'),
+				'#maxlength' => NULL,
+				);
+			break;
+	}
+
+	// Used so that hook_field('validate') knows where to
+	// flag an error in deeply nested forms.
+	if (empty($form['#parents']))
+	{
+		$form['#parents'] = array();
+	}
+	$element['_error_element'] = array(
+		'#type' => 'value',
+		'#value' => implode('][', 
+			array_merge($form['#parents'], array('value'))),
+		);
+
+	return $element;
+}
+
+/*
+EVERYTHING BELOW HERE IS NOW DONE IN JAVASCRIPT
+*/
+
+
+/**
+ * Implementation of FAPI hook_elements().
+ *
+ * Any FAPI callbacks needed for individual widgets can be declared here,
+ * and the element will be passed to those callbacks for processing.
+ *
+ * Drupal will automatically theme the element using a theme with
+ * the same name as the hook_elements key.
+ *
+ * Autocomplete_path is not used by text_widget but other widgets can use it
+ * (see nodereference and userreference).
+ */
+/*function avail_cck_field_elements()
+{
+  return array(
+    'avail_cck_field_debug' => array(
+      '#input' => TRUE,
+      '#columns' => array('value'), '#delta' => 0,
+      '#process' => array('text_textfield_process'),
+      '#autocomplete_path' => FALSE,
+    ),
+  );
+}*/
+
+/**
+ * Process an individual element.
+ *
+ * Build the form element. When creating a form using FAPI #process,
+ * note that $element['#value'] is already set.
+ *
+ * The $fields array is in $form['#field_info'][$element['#field_name']].
+ */
+/*function text_textarea_process($element, $edit, $form_state, $form) {
+  $field = $form['#field_info'][$element['#field_name']];
+  $field_key   = $element['#columns'][0];
+  $element[$field_key] = array(
+    '#type' => 'textarea',
+    '#default_value' => isset($element['#value'][$field_key]) ? $element['#value'][$field_key] : NULL,
+    '#rows' => !empty($field['widget']['rows']) ? $field['widget']['rows'] : 10,
+    '#weight' => 0,
+    // The following values were set by the content module and need
+    // to be passed down to the nested element.
+    '#title' => $element['#title'],
+    '#description' => $element['#description'],
+    '#required' => $element['#required'],
+    '#field_name' => $element['#field_name'],
+    '#type_name' => $element['#type_name'],
+    '#delta' => $element['#delta'],
+    '#columns' => $element['#columns'],
+  );
+
+  if (!empty($field['text_processing'])) {
+    $filter_key  = (count($element['#columns']) == 2) ? $element['#columns'][1] : 'format';
+    $format = isset($element['#value'][$filter_key]) ? $element['#value'][$filter_key] : FILTER_FORMAT_DEFAULT;
+    $parents = array_merge($element['#parents'] , array($filter_key));
+    $element[$filter_key] = filter_form($format, 1, $parents);
+  }
+
+  // Used so that hook_field('validate') knows where to flag an error.
+  $element['_error_element'] = array(
+    '#type' => 'value',
+    '#value' => implode('][', array_merge($element['#parents'], array($field_key))),
+  );
+
+  return $element;
+}*/
+
+/**
+ * FAPI theme for an individual text elements.
+ *
+ * The textfield or textarea is already rendered by the
+ * textfield or textarea themes and the html output
+ * lives in $element['#children']. Override this theme to
+ * make custom changes to the output.
+ *
+ * $element['#field_name'] contains the field name
+ * $element['#delta]  is the position of this element in the group
+ */
+/*function theme_text_textfield($element) {
+  return $element['#children'];
+}
+
+function theme_text_textarea($element) {
+  return $element['#children'];
+}*/
+
+
+/**
+ * Process an individual element.
+ *
+ * Build the form element. When creating a form using FAPI #process,
+ * note that $element['#value'] is already set.
+ *
+ * The $fields array is in $form['#field_info'][$element['#field_name']].
+ */
+ 
+/* COMMENTED OUT
+function text_textfield_process($element, $edit, $form_state, $form) {
+  $field = $form['#field_info'][$element['#field_name']];
+  $field_key = $element['#columns'][0];
+  $delta = $element['#delta'];
+  $element[$field_key] = array(
+    '#type' => 'textfield',
+    '#default_value' => isset($element['#value'][$field_key]) ? $element['#value'][$field_key] : NULL,
+    '#autocomplete_path' => $element['#autocomplete_path'],
+    '#size' => !empty($field['widget']['size']) ? $field['widget']['size'] : 60,
+    '#attributes' => array('class' => 'text'),
+    // The following values were set by the content module and need
+    // to be passed down to the nested element.
+    '#title' => $element['#title'],
+    '#description' => $element['#description'],
+    '#required' => $element['#required'],
+    '#field_name' => $element['#field_name'],
+    '#type_name' => $element['#type_name'],
+    '#delta' => $element['#delta'],
+    '#columns' => $element['#columns'],
+  );
+
+  $element[$field_key]['#maxlength'] = !empty($field['max_length']) ? $field['max_length'] : NULL;
+
+  if (!empty($field['text_processing'])) {
+    $filter_key = $element['#columns'][1];
+    $format = isset($element['#value'][$filter_key]) ? $element['#value'][$filter_key] : FILTER_FORMAT_DEFAULT;
+    $parents = array_merge($element['#parents'] , array($filter_key));
+    $element[$filter_key] = filter_form($format, 1, $parents);
+  }
+
+  // Used so that hook_field('validate') knows where to flag an error.
+  $element['_error_element'] = array(
+    '#type' => 'value',
+    '#value' => implode('][', array_merge($element['#parents'], array($field_key))),
+  );
+
+  return $element;
+}
+*/
