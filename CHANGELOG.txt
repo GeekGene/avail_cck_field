@@ -1,0 +1,3 @@
+avail_cck_field 0.0.1, 2012-03-08
+------------------------
+- Initial release
